@@ -1,0 +1,6 @@
+{
+  "name": "Billar Control",
+  "description": "Aplicación offline-first para la administración rápida de mesas de billar, cronómetros, libreta de fiados, control de maquinitas tragamonedas (dinero en tolva y premios sacados por jugadores), caja y cierre del día.",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}

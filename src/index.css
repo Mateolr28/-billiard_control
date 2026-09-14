@@ -1,0 +1,70 @@
+@import "tailwindcss";
+
+@theme {
+  --color-app-bg: #0F172A;
+  --color-app-surface: #1E293B;
+  --color-app-card: #273449;
+  --color-app-border: #334155;
+  --color-app-text: #F8FAFC;
+  --color-app-muted: #94A3B8;
+  --color-app-emerald: #10B981;
+  --color-app-emerald-light: #34D399;
+  --color-app-amber: #F59E0B;
+  --color-app-red: #EF4444;
+  --color-app-blue: #3B82F6;
+}
+
+@layer base {
+  body {
+    font-family: 'Outfit', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+    background-color: #0F172A;
+    color: #F8FAFC;
+  }
+}
+
+.font-timer {
+  font-family: 'Chivo Mono', monospace;
+  font-variant-numeric: tabular-nums;
+}
+
+.font-serif-billar {
+  font-family: 'Playfair Display', Georgia, serif;
+}
+
+/* Palette exact classes */
+.bg-app-primary {
+  background-color: #0F172A;
+}
+
+.bg-app-secondary {
+  background-color: #1E293B;
+}
+
+.bg-app-card {
+  background-color: #273449;
+}
+
+.border-app {
+  border-color: #334155;
+}
+
+.text-app-primary {
+  color: #F8FAFC;
+}
+
+.text-app-secondary {
+  color: #94A3B8;
+}
+
+.bg-app-emerald {
+  background-color: #10B981;
+}
+
+.text-app-emerald {
+  color: #10B981;
+}
+
+.text-app-emerald-light {
+  color: #34D399;
+}
+
