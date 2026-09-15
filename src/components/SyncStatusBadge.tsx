@@ -19,11 +19,32 @@ export const SyncStatusBadge: React.FC<SyncStatusBadgeProps> = ({ onOpenSettings
     return unsubscribe;
   }, []);
 
+  useEffect(() => {
+    if (!showModal) return;
+
+    const handleEscape = (event: KeyboardEvent) => {
+      if (event.key === 'Escape') {
+        setShowModal(false);
+      }
+    };
+
+    document.addEventListener('keydown', handleEscape);
+    return () => document.removeEventListener('keydown', handleEscape);
+  }, [showModal]);
+
   const handleManualSync = async () => {
     setIsSyncing(true);
     setFeedback(null);
     try {
-      const result = await syncService.processSyncQueue();
+      const result = await Promise.race([
+        syncService.processSyncQueue(),
+        new Promise<{ success: false; synced: number; error: string }>((resolve) => {
+          window.setTimeout(
+            () => resolve({ success: false, synced: 0, error: 'La sincronización está tardando. Puedes cerrar esta ventana y continuará en segundo plano.' }),
+            15000
+          );
+        }),
+      ]);
       if (result.success) {
         setFeedback(`Sincronizados ${result.synced} registros.`);
       } else {
@@ -77,7 +98,13 @@ export const SyncStatusBadge: React.FC<SyncStatusBadgeProps> = ({ onOpenSettings
       </button>
 
       {showModal && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/75 backdrop-blur-xs p-4">
+        <div
+          className="fixed inset-0 z-50 flex items-center justify-center bg-black/75 backdrop-blur-xs p-4"
+          onMouseDown={(event) => {
+            if (event.target === event.currentTarget) setShowModal(false);
+          }}
+          role="presentation"
+        >
           <div className="w-full max-w-md rounded-2xl bg-[#273449] border border-[#334155] p-6 shadow-2xl text-[#F8FAFC] relative">
             <div className="flex items-center justify-between pb-4 border-b border-[#334155]">
               <div className="flex items-center gap-2">
@@ -91,7 +118,9 @@ export const SyncStatusBadge: React.FC<SyncStatusBadgeProps> = ({ onOpenSettings
               </div>
               <button
                 onClick={() => setShowModal(false)}
-                className="text-[#94A3B8] hover:text-[#F8FAFC] p-1 rounded-lg hover:bg-[#1E293B] text-lg leading-none cursor-pointer"
+                type="button"
+                aria-label="Cerrar estado de sincronización"
+                className="text-[#94A3B8] hover:text-[#F8FAFC] p-2 rounded-lg hover:bg-[#1E293B] text-lg leading-none cursor-pointer"
               >
                 ✕
               </button>

@@ -184,9 +184,92 @@ class SyncService {
         .anyOf(['pending', 'failed'])
         .sortBy('timestamp');
 
+      const syncPriority: Record<string, number> = {
+        customers: 10,
+        products: 20,
+        tables: 30,
+        table_sessions: 40,
+        customer_tabs: 45,
+        debts: 50,
+        debt_payments: 60,
+        session_items: 70,
+        customer_tab_items: 75,
+        sales: 80,
+        sale_items: 90,
+      };
+
+      pendingItems.sort(
+        (first, second) =>
+          (syncPriority[first.table_name] || 100) - (syncPriority[second.table_name] || 100) ||
+          first.timestamp.localeCompare(second.timestamp)
+      );
+
       for (const item of pendingItems) {
         try {
           let error: any = null;
+
+          if (item.operation === 'INSERT' || item.operation === 'UPDATE') {
+            let tab: Record<string, any> | undefined;
+            let customerId: string | undefined;
+
+            if (item.table_name === 'customer_tabs') {
+              tab = item.payload;
+              customerId = tab.customer_id;
+            } else if (item.table_name === 'customer_tab_items') {
+              tab = await db.customer_tabs.get(item.payload.tab_id);
+              if (!tab) {
+                throw new Error(`Cuenta abierta local no encontrada: ${item.payload.tab_id}`);
+              }
+              customerId = tab.customer_id;
+            } else if (item.table_name === 'debts' || item.table_name === 'debt_payments') {
+              customerId = item.payload.customer_id;
+            }
+
+            if (customerId) {
+              let customer = await db.customers.get(customerId);
+              if (!customer) {
+                const now = new Date().toISOString();
+                customer = {
+                  id: customerId,
+                  name: item.payload.customer_name || tab?.customer_name || 'Cliente',
+                  phone: tab?.phone,
+                  notes: tab?.notes,
+                  current_debt: item.table_name === 'debts' ? Number(item.payload.amount) || 0 : 0,
+                  created_at: item.payload.created_at || now,
+                  updated_at: now,
+                };
+                await db.customers.put(customer);
+              }
+
+              const { error: customerError } = await this.client
+                .from('customers')
+                .upsert(customer, { onConflict: 'id' });
+              if (customerError) {
+                throw customerError;
+              }
+            }
+
+            if (item.table_name === 'customer_tab_items') {
+              const { error: tabError } = await this.client
+                .from('customer_tabs')
+                .upsert(tab, { onConflict: 'id' });
+              if (tabError) {
+                throw tabError;
+              }
+
+              const product = await db.products.get(item.payload.product_id);
+              if (!product) {
+                throw new Error(`Producto local no encontrado: ${item.payload.product_id}`);
+              }
+
+              const { error: productError } = await this.client
+                .from('products')
+                .upsert(product, { onConflict: 'id' });
+              if (productError) {
+                throw productError;
+              }
+            }
+          }
 
           if (item.operation === 'INSERT' || item.operation === 'UPDATE') {
             const { error: upsertError } = await this.client

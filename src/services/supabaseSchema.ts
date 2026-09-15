@@ -141,7 +141,35 @@ CREATE TABLE IF NOT EXISTS public.sale_items (
     created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
 );
 
--- 12. TABLA DE MOVIMIENTOS DE CAJA (BOLSILLO)
+-- 12. TABLA DE CUENTAS ABIERTAS DE CLIENTES
+CREATE TABLE IF NOT EXISTS public.customer_tabs (
+    id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+    customer_name TEXT NOT NULL,
+    customer_id UUID REFERENCES public.customers(id) ON DELETE SET NULL,
+    phone TEXT,
+    location TEXT,
+    notes TEXT,
+    status TEXT NOT NULL DEFAULT 'abierta' CHECK (status IN ('abierta', 'cerrada')),
+    total_amount NUMERIC NOT NULL DEFAULT 0,
+    created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+    closed_at TIMESTAMPTZ,
+    payment_method TEXT
+);
+
+-- 13. TABLA DE ITEMS DE CUENTAS ABIERTAS
+CREATE TABLE IF NOT EXISTS public.customer_tab_items (
+    id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+    tab_id UUID NOT NULL REFERENCES public.customer_tabs(id) ON DELETE CASCADE,
+    product_id UUID NOT NULL REFERENCES public.products(id) ON DELETE RESTRICT,
+    product_name TEXT NOT NULL,
+    product_icon TEXT,
+    quantity INTEGER NOT NULL DEFAULT 1,
+    unit_price NUMERIC NOT NULL,
+    total_price NUMERIC NOT NULL,
+    created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+);
+
+-- 14. TABLA DE MOVIMIENTOS DE CAJA (BOLSILLO)
 CREATE TABLE IF NOT EXISTS public.cash_movements (
     id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
     type TEXT NOT NULL CHECK (type IN ('ingreso', 'egreso')),
@@ -150,7 +178,7 @@ CREATE TABLE IF NOT EXISTS public.cash_movements (
     created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
 );
 
--- 13. TABLA DE CIERRES DIARIOS
+-- 15. TABLA DE CIERRES DIARIOS
 CREATE TABLE IF NOT EXISTS public.daily_closings (
     id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
     date DATE NOT NULL,
@@ -169,7 +197,7 @@ CREATE TABLE IF NOT EXISTS public.daily_closings (
     closed_by TEXT
 );
 
--- 14. LOG DE AUDITORÍA Y OPERACIONES DE SINCRONIZACIÓN
+-- 16. LOG DE AUDITORÍA Y OPERACIONES DE SINCRONIZACIÓN
 CREATE TABLE IF NOT EXISTS public.audit_logs (
     id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
     action TEXT NOT NULL,
@@ -178,7 +206,7 @@ CREATE TABLE IF NOT EXISTS public.audit_logs (
     timestamp TIMESTAMPTZ NOT NULL DEFAULT NOW()
 );
 
--- 15. TABLA DE MAQUINITAS TRAGAMONEDAS
+-- 17. TABLA DE MAQUINITAS TRAGAMONEDAS
 CREATE TABLE IF NOT EXISTS public.slot_machines (
     id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
     name TEXT NOT NULL,
@@ -196,7 +224,7 @@ CREATE TABLE IF NOT EXISTS public.slot_machines (
     updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
 );
 
--- 16. TABLA DE MOVIMIENTOS DE MAQUINITAS (PREMIOS SACADOS, INGRESOS, ARQUEOS)
+-- 18. TABLA DE MOVIMIENTOS DE MAQUINITAS (PREMIOS SACADOS, INGRESOS, ARQUEOS)
 CREATE TABLE IF NOT EXISTS public.slot_machine_movements (
     id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
     machine_id UUID REFERENCES public.slot_machines(id) ON DELETE CASCADE,
@@ -211,7 +239,7 @@ CREATE TABLE IF NOT EXISTS public.slot_machine_movements (
     created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
 );
 
--- 17. ROW LEVEL SECURITY (RLS)
+-- 19. ROW LEVEL SECURITY (RLS)
 ALTER TABLE public.establishments ENABLE ROW LEVEL SECURITY;
 ALTER TABLE public.tables ENABLE ROW LEVEL SECURITY;
 ALTER TABLE public.table_sessions ENABLE ROW LEVEL SECURITY;
@@ -222,6 +250,8 @@ ALTER TABLE public.debts ENABLE ROW LEVEL SECURITY;
 ALTER TABLE public.debt_payments ENABLE ROW LEVEL SECURITY;
 ALTER TABLE public.sales ENABLE ROW LEVEL SECURITY;
 ALTER TABLE public.sale_items ENABLE ROW LEVEL SECURITY;
+ALTER TABLE public.customer_tabs ENABLE ROW LEVEL SECURITY;
+ALTER TABLE public.customer_tab_items ENABLE ROW LEVEL SECURITY;
 ALTER TABLE public.cash_movements ENABLE ROW LEVEL SECURITY;
 ALTER TABLE public.daily_closings ENABLE ROW LEVEL SECURITY;
 ALTER TABLE public.audit_logs ENABLE ROW LEVEL SECURITY;
@@ -262,6 +292,12 @@ ON public.sales FOR ALL USING (true) WITH CHECK (true);
 CREATE POLICY "Permitir todo en items venta" 
 ON public.sale_items FOR ALL USING (true) WITH CHECK (true);
 
+CREATE POLICY "Permitir todo en cuentas abiertas"
+ON public.customer_tabs FOR ALL USING (true) WITH CHECK (true);
+
+CREATE POLICY "Permitir todo en items de cuentas abiertas"
+ON public.customer_tab_items FOR ALL USING (true) WITH CHECK (true);
+
 CREATE POLICY "Permitir todo en caja" 
 ON public.cash_movements FOR ALL USING (true) WITH CHECK (true);
 
@@ -278,6 +314,8 @@ CREATE INDEX IF NOT EXISTS idx_sessions_status ON public.table_sessions(status);
 CREATE INDEX IF NOT EXISTS idx_debts_customer ON public.debts(customer_id);
 CREATE INDEX IF NOT EXISTS idx_sales_created ON public.sales(created_at);
 CREATE INDEX IF NOT EXISTS idx_cash_created ON public.cash_movements(created_at);
+CREATE INDEX IF NOT EXISTS idx_customer_tabs_status ON public.customer_tabs(status);
+CREATE INDEX IF NOT EXISTS idx_customer_tab_items_tab ON public.customer_tab_items(tab_id);
 `;
 
 export const SUPABASE_SCHEMA_SQL = SUPABASE_SQL_SCHEMA;

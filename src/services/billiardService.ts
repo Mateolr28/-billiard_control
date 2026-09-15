@@ -460,8 +460,8 @@ export const billiardService = {
       });
     });
 
-    await syncService.enqueueOperation('debts', 'INSERT', newDebt);
     await syncService.enqueueOperation('customers', 'UPDATE', updatedCustomer);
+    await syncService.enqueueOperation('debts', 'INSERT', newDebt);
     for (const it of items) {
       const prod = await db.products.get(it.product_id);
       if (prod) {
@@ -1006,8 +1006,8 @@ export const billiardService = {
       });
     });
 
-    await syncService.enqueueOperation('debts', 'INSERT', newDebt);
     await syncService.enqueueOperation('customers', 'UPDATE', updatedCustomer);
+    await syncService.enqueueOperation('debts', 'INSERT', newDebt);
 
     soundService.playCashPing();
     return newDebt;
@@ -1324,8 +1324,8 @@ export const billiardService = {
       });
     });
 
-    await syncService.enqueueOperation('debts', 'INSERT', newDebt);
     await syncService.enqueueOperation('customers', 'UPDATE', updatedCustomer);
+    await syncService.enqueueOperation('debts', 'INSERT', newDebt);
     soundService.playCashPing();
     return newDebt;
   },
