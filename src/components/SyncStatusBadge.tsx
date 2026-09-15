@@ -1,4 +1,5 @@
 import React, { useState, useEffect } from 'react';
+import { createPortal } from 'react-dom';
 import { Cloud, CloudOff, RefreshCw, CheckCircle2, AlertCircle, Database, ExternalLink } from 'lucide-react';
 import { syncService, SyncState } from '../services/syncService';
 
@@ -97,9 +98,9 @@ export const SyncStatusBadge: React.FC<SyncStatusBadgeProps> = ({ onOpenSettings
         <span className="sm:hidden">{syncState.pendingCount > 0 ? `${syncState.pendingCount} pend.` : 'Sync'}</span>
       </button>
 
-      {showModal && (
+      {showModal && typeof document !== 'undefined' && createPortal(
         <div
-          className="fixed inset-0 z-50 flex items-start sm:items-center justify-center overflow-y-auto bg-black/75 backdrop-blur-xs p-4"
+          className="fixed inset-0 z-[100] flex items-start sm:items-center justify-center overflow-y-auto bg-black/75 backdrop-blur-xs p-4"
           onMouseDown={(event) => {
             if (event.target === event.currentTarget) setShowModal(false);
           }}
@@ -228,7 +229,8 @@ export const SyncStatusBadge: React.FC<SyncStatusBadgeProps> = ({ onOpenSettings
               )}
             </div>
           </div>
-        </div>
+        </div>,
+        document.body
       )}
     </>
   );
