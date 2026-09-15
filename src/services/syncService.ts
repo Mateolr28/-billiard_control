@@ -223,7 +223,13 @@ class SyncService {
             } else if (item.table_name === 'customer_tab_items') {
               tab = await db.customer_tabs.get(payload.tab_id);
               if (!tab) {
-                throw new Error(`Cuenta abierta local no encontrada: ${payload.tab_id}`);
+                console.warn(`Omitiendo item de cuenta abierta sin cuenta local: ${payload.tab_id}`);
+                await db.sync_queue.update(item.id, {
+                  status: 'synced',
+                  error_message: 'Cuenta abierta local eliminada antes de sincronizar el item',
+                });
+                syncedCount++;
+                continue;
               }
               customerId = tab.customer_id;
             } else if (item.table_name === 'debts' || item.table_name === 'debt_payments') {

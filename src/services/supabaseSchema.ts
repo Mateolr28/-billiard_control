@@ -21,19 +21,24 @@ CREATE TABLE IF NOT EXISTS public.tables (
     id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
     number INTEGER NOT NULL,
     name TEXT NOT NULL,
-    status TEXT NOT NULL DEFAULT 'libre' CHECK (status IN ('libre', 'jugando', 'pausada', 'prepago', 'pendiente_pago', 'fuera_servicio')),
+    status TEXT NOT NULL DEFAULT 'libre' CHECK (status IN ('libre', 'jugando', 'pausada', 'prepago', 'solo_consumo', 'pendiente_pago', 'fuera_servicio')),
     hourly_rate NUMERIC NOT NULL DEFAULT 10000,
     current_session_id UUID,
     is_active BOOLEAN NOT NULL DEFAULT true,
     updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
 );
 
+-- Compatibilidad con proyectos existentes que usan mesas de solo consumo
+ALTER TABLE public.tables DROP CONSTRAINT IF EXISTS tables_status_check;
+ALTER TABLE public.tables
+    ADD CONSTRAINT tables_status_check CHECK (status IN ('libre', 'jugando', 'pausada', 'prepago', 'solo_consumo', 'pendiente_pago', 'fuera_servicio'));
+
 -- 4. TABLA DE SESIONES DE JUEGO (CRONÓMETROS)
 CREATE TABLE IF NOT EXISTS public.table_sessions (
     id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
     table_id UUID REFERENCES public.tables(id) ON DELETE CASCADE,
     table_number INTEGER NOT NULL,
-    mode TEXT NOT NULL DEFAULT 'libre' CHECK (mode IN ('libre', 'prepago')),
+    mode TEXT NOT NULL DEFAULT 'libre' CHECK (mode IN ('libre', 'prepago', 'consumo')),
     prepago_minutes INTEGER,
     started_at TIMESTAMPTZ NOT NULL,
     paused_at TIMESTAMPTZ,
@@ -46,6 +51,11 @@ CREATE TABLE IF NOT EXISTS public.table_sessions (
     created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
     updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
 );
+
+-- Compatibilidad con proyectos existentes creados antes del modo consumo
+ALTER TABLE public.table_sessions DROP CONSTRAINT IF EXISTS table_sessions_mode_check;
+ALTER TABLE public.table_sessions
+    ADD CONSTRAINT table_sessions_mode_check CHECK (mode IN ('libre', 'prepago', 'consumo'));
 
 -- 5. TABLA DE PRODUCTOS (INVENTARIO SIMPLE)
 CREATE TABLE IF NOT EXISTS public.products (

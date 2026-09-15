@@ -99,13 +99,13 @@ export const SyncStatusBadge: React.FC<SyncStatusBadgeProps> = ({ onOpenSettings
 
       {showModal && (
         <div
-          className="fixed inset-0 z-50 flex items-center justify-center bg-black/75 backdrop-blur-xs p-4"
+          className="fixed inset-0 z-50 flex items-start sm:items-center justify-center overflow-y-auto bg-black/75 backdrop-blur-xs p-4"
           onMouseDown={(event) => {
             if (event.target === event.currentTarget) setShowModal(false);
           }}
           role="presentation"
         >
-          <div className="w-full max-w-md rounded-2xl bg-[#273449] border border-[#334155] p-6 shadow-2xl text-[#F8FAFC] relative">
+          <div className="my-auto max-h-[calc(100dvh-2rem)] w-full max-w-md overflow-y-auto rounded-2xl bg-[#273449] border border-[#334155] p-4 sm:p-6 shadow-2xl text-[#F8FAFC] relative">
             <div className="flex items-center justify-between pb-4 border-b border-[#334155]">
               <div className="flex items-center gap-2">
                 <div className="p-2 rounded-xl bg-[#1E293B] text-[#10B981] border border-[#334155]">
