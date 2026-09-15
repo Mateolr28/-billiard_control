@@ -15,6 +15,8 @@ import {
   Banknote,
   ArrowDownCircle,
   ArrowUpCircle,
+  Pencil,
+  Trash2,
 } from 'lucide-react';
 import { db } from '../db';
 import { Customer, Debt, DebtPayment, PaymentMethod } from '../types';
@@ -30,6 +32,7 @@ export const FiadosModule: React.FC = () => {
   const [selectedCustomerId, setSelectedCustomerId] = useState<string | null>(null);
   const [showNewCustomerModal, setShowNewCustomerModal] = useState(false);
   const [showAbonoModal, setShowAbonoModal] = useState(false);
+  const [editingCustomerId, setEditingCustomerId] = useState<string | null>(null);
 
   // New Customer Form State
   const [newName, setNewName] = useState('');
@@ -86,25 +89,68 @@ export const FiadosModule: React.FC = () => {
     if (!newName.trim()) return;
 
     try {
-      const now = new Date().toISOString();
-      const id = crypto.randomUUID ? crypto.randomUUID() : Date.now().toString();
-      await db.customers.add({
-        id,
-        name: newName.trim(),
-        phone: newPhone.trim() || undefined,
-        notes: newNotes.trim() || undefined,
-        current_debt: 0,
-        created_at: now,
-        updated_at: now,
+      const customer = await billiardService.createCustomer({
+        name: newName,
+        phone: newPhone,
+        notes: newNotes,
       });
 
       setNewName('');
       setNewPhone('');
       setNewNotes('');
       setShowNewCustomerModal(false);
-      setSelectedCustomerId(id);
+      setSelectedCustomerId(customer.id);
     } catch (err: any) {
       alert(err?.message || 'Error al crear cliente');
+    }
+  };
+
+  const handleEditCustomer = (customer: Customer) => {
+    setEditingCustomerId(customer.id);
+    setNewName(customer.name);
+    setNewPhone(customer.phone || '');
+    setNewNotes(customer.notes || '');
+    setShowNewCustomerModal(true);
+  };
+
+  const handleSaveCustomer = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!newName.trim()) return;
+
+    try {
+      if (editingCustomerId) {
+        await billiardService.updateCustomer(editingCustomerId, {
+          name: newName,
+          phone: newPhone,
+          notes: newNotes,
+        });
+      } else {
+        await handleCreateCustomer(e);
+        return;
+      }
+
+      setNewName('');
+      setNewPhone('');
+      setNewNotes('');
+      setEditingCustomerId(null);
+      setShowNewCustomerModal(false);
+    } catch (err: any) {
+      alert(err?.message || 'Error al guardar cliente');
+    }
+  };
+
+  const handleDeleteCustomer = async (customer: Customer) => {
+    if (
+      !window.confirm(
+        `¿Eliminar a ${customer.name} de la libreta? Esta acción elimina también su historial de deudas y abonos.`
+      )
+    ) return;
+
+    try {
+      await billiardService.deleteCustomer(customer.id);
+      if (selectedCustomerId === customer.id) setSelectedCustomerId(null);
+    } catch (err: any) {
+      alert(err?.message || 'No se puede eliminar este cliente');
     }
   };
 
@@ -156,7 +202,13 @@ export const FiadosModule: React.FC = () => {
           </div>
 
           <button
-            onClick={() => setShowNewCustomerModal(true)}
+            onClick={() => {
+              setEditingCustomerId(null);
+              setNewName('');
+              setNewPhone('');
+              setNewNotes('');
+              setShowNewCustomerModal(true);
+            }}
             className="flex items-center gap-2 py-2.5 px-4 rounded-xl bg-[#10B981] hover:bg-[#10B981]/90 text-white text-xs font-bold shadow-md transition active:scale-95 cursor-pointer"
           >
             <UserPlus className="w-4 h-4" />
@@ -215,14 +267,40 @@ export const FiadosModule: React.FC = () => {
                       )}
                     </div>
 
-                    <div className="text-right">
-                      <div className="text-[11px] text-[#94A3B8]">Debe:</div>
-                      <div
-                        className={`text-sm font-black font-timer ${
-                          hasDebt ? 'text-[#EF4444]' : 'text-[#94A3B8]'
-                        }`}
-                      >
-                        {formatMoney(c.current_debt || 0)}
+                    <div className="flex items-center gap-3">
+                      <div className="text-right">
+                        <div className="text-[11px] text-[#94A3B8]">Debe:</div>
+                        <div
+                          className={`text-sm font-black font-timer ${
+                            hasDebt ? 'text-[#EF4444]' : 'text-[#94A3B8]'
+                          }`}
+                        >
+                          {formatMoney(c.current_debt || 0)}
+                        </div>
+                      </div>
+                      <div className="flex items-center gap-1">
+                        <button
+                          type="button"
+                          title="Editar cliente"
+                          onClick={(event) => {
+                            event.stopPropagation();
+                            handleEditCustomer(c);
+                          }}
+                          className="p-2 rounded-lg text-[#94A3B8] hover:text-[#10B981] hover:bg-[#1E293B] cursor-pointer"
+                        >
+                          <Pencil className="w-4 h-4" />
+                        </button>
+                        <button
+                          type="button"
+                          title="Eliminar cliente"
+                          onClick={(event) => {
+                            event.stopPropagation();
+                            handleDeleteCustomer(c);
+                          }}
+                          className="p-2 rounded-lg text-[#94A3B8] hover:text-[#EF4444] hover:bg-[#1E293B] cursor-pointer"
+                        >
+                          <Trash2 className="w-4 h-4" />
+                        </button>
                       </div>
                     </div>
                   </div>
@@ -358,10 +436,10 @@ export const FiadosModule: React.FC = () => {
 
             <h3 className="text-lg font-bold text-[#F8FAFC] mb-4 flex items-center gap-2">
               <UserPlus className="w-5 h-5 text-[#10B981]" />
-              <span>Registrar Nuevo Cliente</span>
+              <span>{editingCustomerId ? 'Editar Cliente' : 'Registrar Nuevo Cliente'}</span>
             </h3>
 
-            <form onSubmit={handleCreateCustomer} className="space-y-4">
+            <form onSubmit={handleSaveCustomer} className="space-y-4">
               <div>
                 <label className="text-xs text-[#94A3B8] block mb-1">Nombre Completo *</label>
                 <input
@@ -408,7 +486,7 @@ export const FiadosModule: React.FC = () => {
                   type="submit"
                   className="flex-2 py-2.5 px-4 rounded-xl bg-[#10B981] hover:bg-[#10B981]/90 text-white text-xs font-bold shadow-md cursor-pointer"
                 >
-                  Guardar Cliente
+                  {editingCustomerId ? 'Guardar Cambios' : 'Guardar Cliente'}
                 </button>
               </div>
             </form>
@@ -435,7 +513,16 @@ export const FiadosModule: React.FC = () => {
 
             <form onSubmit={handleRegisterAbono} className="space-y-4">
               <div>
-                <label className="text-xs text-[#94A3B8] block mb-1">Valor del Abono *</label>
+                <div className="flex items-center justify-between mb-1">
+                  <label className="text-xs text-[#94A3B8]">Valor del Abono o Pago Total *</label>
+                  <button
+                    type="button"
+                    onClick={() => setAbonoAmount(String(selectedCustomer.current_debt || 0))}
+                    className="text-[11px] font-bold text-[#10B981] hover:text-white cursor-pointer"
+                  >
+                    Pagar todo ({formatMoney(selectedCustomer.current_debt || 0)})
+                  </button>
+                </div>
                 <input
                   type="number"
                   required

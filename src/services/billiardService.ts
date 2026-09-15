@@ -556,8 +556,32 @@ export const billiardService = {
       updated_at: now,
     };
 
-    await db.transaction('rw', [db.debt_payments, db.customers, db.audit_logs], async () => {
+    const customerDebts = await db.debts
+      .where('customer_id')
+      .equals(customerId)
+      .and((debt) => !debt.is_settled && debt.remaining_amount > 0)
+      .sortBy('created_at');
+
+    let amountToApply = amount;
+    const updatedDebts: Debt[] = [];
+    for (const debt of customerDebts) {
+      if (amountToApply <= 0) break;
+
+      const appliedAmount = Math.min(amountToApply, debt.remaining_amount);
+      const remainingAmount = Math.max(0, debt.remaining_amount - appliedAmount);
+      updatedDebts.push({
+        ...debt,
+        remaining_amount: remainingAmount,
+        is_settled: remainingAmount === 0,
+      });
+      amountToApply -= appliedAmount;
+    }
+
+    await db.transaction('rw', [db.debt_payments, db.debts, db.customers, db.audit_logs], async () => {
       await db.debt_payments.add(newPayment);
+      for (const debt of updatedDebts) {
+        await db.debts.put(debt);
+      }
       await db.customers.put(updatedCustomer);
       await db.audit_logs.add({
         id: generateUUID(),
@@ -569,10 +593,103 @@ export const billiardService = {
     });
 
     await syncService.enqueueOperation('debt_payments', 'INSERT', newPayment);
+    for (const debt of updatedDebts) {
+      await syncService.enqueueOperation('debts', 'UPDATE', debt);
+    }
     await syncService.enqueueOperation('customers', 'UPDATE', updatedCustomer);
 
     soundService.playCashPing();
     return newPayment;
+  },
+
+  /**
+   * Create a customer for the credit ledger
+   */
+  async createCustomer(data: { name: string; phone?: string; notes?: string }): Promise<Customer> {
+    const name = data.name.trim();
+    if (!name) throw new Error('El nombre del cliente es obligatorio');
+
+    const now = new Date().toISOString();
+    const customer: Customer = {
+      id: generateUUID(),
+      name,
+      phone: data.phone?.trim() || undefined,
+      notes: data.notes?.trim() || undefined,
+      current_debt: 0,
+      created_at: now,
+      updated_at: now,
+    };
+
+    await db.customers.add(customer);
+    await syncService.enqueueOperation('customers', 'INSERT', customer);
+    return customer;
+  },
+
+  /**
+   * Update customer contact details without changing their financial balance
+   */
+  async updateCustomer(customerId: string, updates: Pick<Customer, 'name' | 'phone' | 'notes'>): Promise<Customer> {
+    const customer = await db.customers.get(customerId);
+    if (!customer) throw new Error('Cliente no encontrado');
+
+    const name = updates.name.trim();
+    if (!name) throw new Error('El nombre del cliente es obligatorio');
+
+    const updatedCustomer: Customer = {
+      ...customer,
+      name,
+      phone: updates.phone?.trim() || undefined,
+      notes: updates.notes?.trim() || undefined,
+      updated_at: new Date().toISOString(),
+    };
+
+    await db.customers.put(updatedCustomer);
+    await syncService.enqueueOperation('customers', 'UPDATE', updatedCustomer);
+    await db.audit_logs.add({
+      id: generateUUID(),
+      action: 'UPDATE_CUSTOMER',
+      entity: 'customer',
+      details: `Cliente modificado: ${updatedCustomer.name}`,
+      timestamp: updatedCustomer.updated_at,
+    });
+
+    return updatedCustomer;
+  },
+
+  /**
+   * Delete a customer only when it has no financial history
+   */
+  async deleteCustomer(customerId: string): Promise<void> {
+    const customer = await db.customers.get(customerId);
+    if (!customer) throw new Error('Cliente no encontrado');
+
+    if ((customer.current_debt || 0) > 0) {
+      throw new Error('Primero debes saldar la deuda del cliente');
+    }
+
+    const customerDebts = await db.debts.where('customer_id').equals(customerId).toArray();
+    const customerPayments = await db.debt_payments.where('customer_id').equals(customerId).toArray();
+
+    await db.transaction('rw', [db.customers, db.debts, db.debt_payments, db.audit_logs], async () => {
+      await db.customers.delete(customerId);
+      await db.debts.where('customer_id').equals(customerId).delete();
+      await db.debt_payments.where('customer_id').equals(customerId).delete();
+      await db.audit_logs.add({
+        id: generateUUID(),
+        action: 'DELETE_CUSTOMER',
+        entity: 'customer',
+        details: `Cliente eliminado: ${customer.name} junto con su historial financiero`,
+        timestamp: new Date().toISOString(),
+      });
+    });
+
+    for (const debt of customerDebts) {
+      await syncService.enqueueOperation('debts', 'DELETE', { id: debt.id });
+    }
+    for (const payment of customerPayments) {
+      await syncService.enqueueOperation('debt_payments', 'DELETE', { id: payment.id });
+    }
+    await syncService.enqueueOperation('customers', 'DELETE', { id: customerId });
   },
 
   /**
