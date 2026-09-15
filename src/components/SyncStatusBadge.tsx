@@ -199,6 +199,13 @@ export const SyncStatusBadge: React.FC<SyncStatusBadgeProps> = ({ onOpenSettings
 
             <div className="mt-5 pt-3 border-t border-[#334155] flex flex-col sm:flex-row gap-2">
               <button
+                onClick={() => setShowModal(false)}
+                type="button"
+                className="order-last flex items-center justify-center py-2.5 px-4 rounded-xl bg-transparent hover:bg-[#1E293B] text-[#94A3B8] hover:text-[#F8FAFC] text-xs font-semibold border border-[#334155] transition cursor-pointer sm:order-first"
+              >
+                Cerrar
+              </button>
+              <button
                 onClick={handleManualSync}
                 disabled={isSyncing || !syncState.isOnline}
                 className="flex-1 flex items-center justify-center gap-2 py-2.5 px-4 rounded-xl bg-[#10B981] hover:bg-[#10B981]/90 disabled:opacity-50 text-white text-xs font-bold transition cursor-pointer font-timer"

@@ -30,6 +30,11 @@ class SyncService {
     if (typeof window !== 'undefined') {
       window.addEventListener('online', () => this.handleConnectivityChange(true));
       window.addEventListener('offline', () => this.handleConnectivityChange(false));
+      window.setInterval(() => {
+        if (this.state.isOnline && this.state.isConfigured && !this.syncInProgress) {
+          this.processSyncQueue().catch(() => {});
+        }
+      }, 30000);
     }
   }
 
@@ -364,6 +369,9 @@ class SyncService {
       });
 
       await this.updatePendingCount();
+      if (this.state.pendingCount === 0) {
+        await this.pullRemoteData();
+      }
       this.notify();
       return { success: true, synced: syncedCount };
     } catch (err: any) {
@@ -373,6 +381,42 @@ class SyncService {
       return { success: false, synced: syncedCount, error: err?.message };
     } finally {
       this.syncInProgress = false;
+    }
+  }
+
+  /** Download remote records so every browser/device receives changes from others. */
+  private async pullRemoteData() {
+    if (!this.client || !this.state.isOnline) return;
+
+    const remoteTables = [
+      'tables',
+      'table_sessions',
+      'session_items',
+      'products',
+      'customers',
+      'debts',
+      'debt_payments',
+      'sales',
+      'sale_items',
+      'customer_tabs',
+      'customer_tab_items',
+      'cash_movements',
+      'daily_closings',
+      'audit_logs',
+      'slot_machines',
+      'slot_machine_movements',
+    ];
+
+    for (const tableName of remoteTables) {
+      const { data, error } = await this.client.from(tableName).select('*');
+      if (error) {
+        throw error;
+      }
+
+      const localTable = (db as any)[tableName === 'tables' ? 'billiard_tables' : tableName];
+      if (localTable && data?.length) {
+        await localTable.bulkPut(data);
+      }
     }
   }
 
