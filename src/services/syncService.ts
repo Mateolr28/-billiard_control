@@ -211,22 +211,23 @@ class SyncService {
       for (const item of pendingItems) {
         try {
           let error: any = null;
+          let payload = item.payload;
 
           if (item.operation === 'INSERT' || item.operation === 'UPDATE') {
             let tab: Record<string, any> | undefined;
             let customerId: string | undefined;
 
             if (item.table_name === 'customer_tabs') {
-              tab = item.payload;
+              tab = payload;
               customerId = tab.customer_id;
             } else if (item.table_name === 'customer_tab_items') {
-              tab = await db.customer_tabs.get(item.payload.tab_id);
+              tab = await db.customer_tabs.get(payload.tab_id);
               if (!tab) {
-                throw new Error(`Cuenta abierta local no encontrada: ${item.payload.tab_id}`);
+                throw new Error(`Cuenta abierta local no encontrada: ${payload.tab_id}`);
               }
               customerId = tab.customer_id;
             } else if (item.table_name === 'debts' || item.table_name === 'debt_payments') {
-              customerId = item.payload.customer_id;
+              customerId = payload.customer_id;
             }
 
             if (customerId) {
@@ -235,11 +236,11 @@ class SyncService {
                 const now = new Date().toISOString();
                 customer = {
                   id: customerId,
-                  name: item.payload.customer_name || tab?.customer_name || 'Cliente',
+                  name: payload.customer_name || tab?.customer_name || 'Cliente',
                   phone: tab?.phone,
                   notes: tab?.notes,
-                  current_debt: item.table_name === 'debts' ? Number(item.payload.amount) || 0 : 0,
-                  created_at: item.payload.created_at || now,
+                  current_debt: item.table_name === 'debts' ? Number(payload.amount) || 0 : 0,
+                  created_at: payload.created_at || now,
                   updated_at: now,
                 };
                 await db.customers.put(customer);
@@ -261,9 +262,9 @@ class SyncService {
                 throw tabError;
               }
 
-              const product = await db.products.get(item.payload.product_id);
+              const product = await db.products.get(payload.product_id);
               if (!product) {
-                throw new Error(`Producto local no encontrado: ${item.payload.product_id}`);
+                throw new Error(`Producto local no encontrado: ${payload.product_id}`);
               }
 
               const { error: productError } = await this.client
@@ -273,12 +274,33 @@ class SyncService {
                 throw productError;
               }
             }
+
+            if (item.table_name === 'sales' && payload.session_id) {
+              const session = await db.sessions.get(payload.session_id);
+              if (!session) {
+                payload = { ...payload, session_id: null };
+                await db.sync_queue.update(item.id, { payload });
+              } else {
+                const table = await db.billiard_tables.get(session.table_id);
+                if (table) {
+                  const { error: tableError } = await this.client
+                    .from('tables')
+                    .upsert(table, { onConflict: 'id' });
+                  if (tableError) throw tableError;
+                }
+
+                const { error: sessionError } = await this.client
+                  .from('table_sessions')
+                  .upsert(session, { onConflict: 'id' });
+                if (sessionError) throw sessionError;
+              }
+            }
           }
 
           if (item.operation === 'INSERT' || item.operation === 'UPDATE') {
             const { error: upsertError } = await this.client
               .from(item.table_name)
-              .upsert(item.payload, { onConflict: 'id' });
+              .upsert(payload, { onConflict: 'id' });
             error = upsertError;
           } else if (item.operation === 'DELETE') {
             const { error: deleteError } = await this.client
