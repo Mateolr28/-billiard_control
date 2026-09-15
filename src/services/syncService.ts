@@ -302,6 +302,21 @@ class SyncService {
               .from(item.table_name)
               .upsert(payload, { onConflict: 'id' });
             error = upsertError;
+
+            if (
+              error &&
+              item.table_name === 'sales' &&
+              payload.session_id &&
+              error.code === '23503' &&
+              error.message?.includes('sales_session_id_fkey')
+            ) {
+              payload = { ...payload, session_id: null };
+              await db.sync_queue.update(item.id, { payload });
+              const retry = await this.client
+                .from('sales')
+                .upsert(payload, { onConflict: 'id' });
+              error = retry.error;
+            }
           } else if (item.operation === 'DELETE') {
             const { error: deleteError } = await this.client
               .from(item.table_name)
