@@ -59,7 +59,9 @@ class SyncService {
 
     if (supabaseUrl && supabaseAnonKey && supabaseUrl.trim() !== '' && supabaseAnonKey.trim() !== '') {
       try {
-        this.client = createClient(supabaseUrl.trim(), supabaseAnonKey.trim(), {
+        this.supabaseUrl = supabaseUrl.trim();
+        this.supabaseAnonKey = supabaseAnonKey.trim();
+        this.client = createClient(this.supabaseUrl, this.supabaseAnonKey, {
           auth: {
             persistSession: true,
             autoRefreshToken: true,
@@ -72,6 +74,8 @@ class SyncService {
       }
     } else {
       this.client = null;
+      this.supabaseUrl = '';
+      this.supabaseAnonKey = '';
       this.state.isConfigured = false;
     }
 
