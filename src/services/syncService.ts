@@ -388,6 +388,10 @@ class SyncService {
   private async pullRemoteData() {
     if (!this.client || !this.state.isOnline) return;
 
+    const localTableNames: Record<string, string> = {
+      tables: 'billiard_tables',
+      table_sessions: 'sessions',
+    };
     const remoteTables = [
       'tables',
       'table_sessions',
@@ -408,14 +412,46 @@ class SyncService {
     ];
 
     for (const tableName of remoteTables) {
-      const { data, error } = await this.client.from(tableName).select('*');
+      const { data: fetchedData, error } = await this.client.from(tableName).select('*');
       if (error) {
         throw error;
       }
 
-      const localTable = (db as any)[tableName === 'tables' ? 'billiard_tables' : tableName];
-      if (localTable && data?.length) {
-        await localTable.bulkPut(data);
+      let data = fetchedData || [];
+      if (tableName === 'tables') {
+        const tablesByNumber = new Map<number, Record<string, any>>();
+        for (const table of data) {
+          const current = tablesByNumber.get(table.number);
+          const currentIsActive = current && current.status !== 'libre';
+          const tableIsActive = table.status !== 'libre';
+          const currentUpdatedAt = current ? new Date(current.updated_at || 0).getTime() : 0;
+          const tableUpdatedAt = new Date(table.updated_at || 0).getTime();
+
+          if (
+            !current ||
+            (tableIsActive && !currentIsActive) ||
+            (tableIsActive === currentIsActive && tableUpdatedAt > currentUpdatedAt)
+          ) {
+            tablesByNumber.set(table.number, table);
+          }
+        }
+        data = Array.from(tablesByNumber.values());
+      }
+
+      const localTable = (db as any)[localTableNames[tableName] || tableName];
+      if (localTable) {
+        const remoteIds = new Set((data || []).map((record: { id: string }) => record.id));
+        const localRecords = await localTable.toArray();
+        const staleIds = localRecords
+          .filter((record: { id: string }) => !remoteIds.has(record.id))
+          .map((record: { id: string }) => record.id);
+
+        if (staleIds.length) {
+          await localTable.bulkDelete(staleIds);
+        }
+        if (data?.length) {
+          await localTable.bulkPut(data);
+        }
       }
     }
   }
