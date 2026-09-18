@@ -329,11 +329,19 @@ class SyncService {
               error = retry.error;
             }
           } else if (item.operation === 'DELETE') {
-            const { error: deleteError } = await this.client
-              .from(item.table_name)
-              .delete()
-              .eq('id', item.payload.id);
-            error = deleteError;
+            if (item.table_name === 'products') {
+              const { error: deactivateError } = await this.client
+                .from('products')
+                .update({ is_active: false, updated_at: new Date().toISOString() })
+                .eq('id', item.payload.id);
+              error = deactivateError;
+            } else {
+              const { error: deleteError } = await this.client
+                .from(item.table_name)
+                .delete()
+                .eq('id', item.payload.id);
+              error = deleteError;
+            }
           }
 
           if (error) {

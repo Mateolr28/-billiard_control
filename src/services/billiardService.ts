@@ -1462,7 +1462,15 @@ export const billiardService = {
 
     const now = new Date().toISOString();
 
-    if (softDelete) {
+    const [sessionItems, customerTabItems, saleItems] = await Promise.all([
+      db.session_items.where('product_id').equals(productId).count(),
+      db.customer_tab_items.where('product_id').equals(productId).count(),
+      db.sale_items.where('product_id').equals(productId).count(),
+    ]);
+    const hasReferences = sessionItems > 0 || customerTabItems > 0 || saleItems > 0;
+    const shouldSoftDelete = softDelete || hasReferences;
+
+    if (shouldSoftDelete) {
       await db.products.update(productId, { is_active: false, updated_at: now });
       const updated = await db.products.get(productId);
       if (updated) {
@@ -1477,7 +1485,7 @@ export const billiardService = {
       id: generateUUID(),
       action: 'DELETE_PRODUCT',
       entity: 'product',
-      details: `Producto ${softDelete ? 'desactivado' : 'eliminado'}: ${product.name}`,
+      details: `Producto ${shouldSoftDelete ? 'desactivado' : 'eliminado'}: ${product.name}`,
       timestamp: now,
     });
   },
