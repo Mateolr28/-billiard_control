@@ -170,7 +170,7 @@ CREATE TABLE IF NOT EXISTS public.customer_tabs (
 CREATE TABLE IF NOT EXISTS public.customer_tab_items (
     id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
     tab_id UUID NOT NULL REFERENCES public.customer_tabs(id) ON DELETE CASCADE,
-    product_id UUID NOT NULL REFERENCES public.products(id) ON DELETE RESTRICT,
+    product_id UUID REFERENCES public.products(id) ON DELETE SET NULL,
     product_name TEXT NOT NULL,
     product_icon TEXT,
     quantity INTEGER NOT NULL DEFAULT 1,
@@ -178,6 +178,14 @@ CREATE TABLE IF NOT EXISTS public.customer_tab_items (
     total_price NUMERIC NOT NULL,
     created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
 );
+
+ALTER TABLE public.customer_tab_items
+    ALTER COLUMN product_id DROP NOT NULL;
+ALTER TABLE public.customer_tab_items
+    DROP CONSTRAINT IF EXISTS customer_tab_items_product_id_fkey;
+ALTER TABLE public.customer_tab_items
+    ADD CONSTRAINT customer_tab_items_product_id_fkey
+    FOREIGN KEY (product_id) REFERENCES public.products(id) ON DELETE SET NULL;
 
 -- 14. TABLA DE MOVIMIENTOS DE CAJA (BOLSILLO)
 CREATE TABLE IF NOT EXISTS public.cash_movements (
