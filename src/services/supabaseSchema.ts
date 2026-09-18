@@ -76,7 +76,7 @@ CREATE TABLE IF NOT EXISTS public.session_items (
     id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
     session_id UUID REFERENCES public.table_sessions(id) ON DELETE CASCADE,
     table_id UUID REFERENCES public.tables(id) ON DELETE CASCADE,
-    product_id UUID REFERENCES public.products(id) ON DELETE RESTRICT,
+    product_id UUID REFERENCES public.products(id) ON DELETE SET NULL,
     product_name TEXT NOT NULL,
     product_icon TEXT,
     quantity INTEGER NOT NULL DEFAULT 1,
@@ -84,6 +84,14 @@ CREATE TABLE IF NOT EXISTS public.session_items (
     total_price NUMERIC NOT NULL,
     created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
 );
+
+ALTER TABLE public.session_items
+    ALTER COLUMN product_id DROP NOT NULL;
+ALTER TABLE public.session_items
+    DROP CONSTRAINT IF EXISTS session_items_product_id_fkey;
+ALTER TABLE public.session_items
+    ADD CONSTRAINT session_items_product_id_fkey
+    FOREIGN KEY (product_id) REFERENCES public.products(id) ON DELETE SET NULL;
 
 -- 7. TABLA DE CLIENTES (LIBRETA DE FIADOS)
 CREATE TABLE IF NOT EXISTS public.customers (
