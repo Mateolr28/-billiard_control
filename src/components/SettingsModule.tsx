@@ -41,6 +41,7 @@ export const SettingsModule: React.FC = () => {
 
   // Table edit modal / form
   const [editingTable, setEditingTable] = useState<BilliardTable | null>(null);
+  const [showAddTableModal, setShowAddTableModal] = useState(false);
   const [newTableNumber, setNewTableNumber] = useState<number>(tables.length + 1);
   const [newTableName, setNewTableName] = useState<string>('');
   const [newTableRate, setNewTableRate] = useState<number>(10000);
@@ -82,26 +83,16 @@ export const SettingsModule: React.FC = () => {
   const handleSaveTable = async (e: React.FormEvent) => {
     e.preventDefault();
     try {
-      const now = new Date().toISOString();
       if (editingTable) {
-        await db.billiard_tables.update(editingTable.id, {
-          name: newTableName,
-          hourly_rate: Number(newTableRate),
-          updated_at: now,
-        });
+        await billiardService.updateTable(editingTable.id, newTableName, Number(newTableRate));
         setEditingTable(null);
       } else {
-        const id = crypto.randomUUID ? crypto.randomUUID() : Date.now().toString();
-        await db.billiard_tables.add({
-          id,
-          number: Number(newTableNumber),
-          name: newTableName || `Mesa ${newTableNumber}`,
-          status: 'libre',
-          hourly_rate: Number(newTableRate),
-          current_session_id: null,
-          is_active: true,
-          updated_at: now,
-        });
+        await billiardService.createTable(
+          Number(newTableNumber),
+          newTableName || `Mesa ${newTableNumber}`,
+          Number(newTableRate)
+        );
+        setShowAddTableModal(false);
       }
       setNewTableName('');
     } catch (err: any) {
@@ -221,6 +212,7 @@ export const SettingsModule: React.FC = () => {
             <button
               onClick={() => {
                 setEditingTable(null);
+                setShowAddTableModal(true);
                 setNewTableNumber(tables.length + 1);
                 setNewTableName(`Mesa ${tables.length + 1}`);
                 setNewTableRate(10000);
@@ -266,13 +258,26 @@ export const SettingsModule: React.FC = () => {
           </div>
 
           {/* Edit Table Modal */}
-          {editingTable && (
+          {(editingTable || showAddTableModal) && (
             <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/80 backdrop-blur-xs p-4">
               <div className="w-full max-w-sm rounded-2xl bg-[#273449] border border-[#334155] p-6 shadow-2xl text-[#F8FAFC]">
                 <h3 className="text-base font-bold text-[#F8FAFC] mb-4">
-                  Editar {editingTable.name}
+                  {editingTable ? `Editar ${editingTable.name}` : 'Agregar mesa'}
                 </h3>
                 <form onSubmit={handleSaveTable} className="space-y-4">
+                  {!editingTable && (
+                    <div>
+                      <label className="text-xs text-[#94A3B8] block mb-1">Número</label>
+                      <input
+                        type="number"
+                        required
+                        min="1"
+                        value={newTableNumber}
+                        onChange={(e) => setNewTableNumber(Number(e.target.value))}
+                        className="w-full bg-[#1E293B] border border-[#334155] rounded-xl px-3 py-2 text-sm text-[#F8FAFC] focus:outline-hidden focus:border-[#10B981]"
+                      />
+                    </div>
+                  )}
                   <div>
                     <label className="text-xs text-[#94A3B8] block mb-1">Nombre</label>
                     <input
@@ -300,7 +305,10 @@ export const SettingsModule: React.FC = () => {
                   <div className="flex gap-2 pt-2">
                     <button
                       type="button"
-                      onClick={() => setEditingTable(null)}
+                      onClick={() => {
+                        setEditingTable(null);
+                        setShowAddTableModal(false);
+                      }}
                       className="flex-1 py-2 px-3 rounded-xl bg-[#1E293B] hover:bg-[#334155] text-[#94A3B8] hover:text-[#F8FAFC] text-xs font-semibold border border-[#334155] cursor-pointer"
                     >
                       Cancelar

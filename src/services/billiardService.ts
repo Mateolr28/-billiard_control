@@ -843,6 +843,22 @@ export const billiardService = {
     return newTable;
   },
 
+  async updateTable(tableId: string, name: string, hourlyRate: number): Promise<BilliardTable> {
+    const table = await db.billiard_tables.get(tableId);
+    if (!table) throw new Error('Mesa no encontrada');
+
+    const updatedTable: BilliardTable = {
+      ...table,
+      name: name.trim() || table.name,
+      hourly_rate: hourlyRate > 0 ? hourlyRate : table.hourly_rate,
+      updated_at: new Date().toISOString(),
+    };
+
+    await db.billiard_tables.put(updatedTable);
+    await syncService.enqueueOperation('tables', 'UPDATE', updatedTable);
+    return updatedTable;
+  },
+
   /**
    * Remove/delete table
    */
