@@ -110,6 +110,11 @@ export const DirectSaleModal: React.FC<DirectSaleModalProps> = ({ onClose, onSuc
   // Direct checkout
   const handleCheckoutPaid = async () => {
     if (cart.length === 0) return;
+    if (paymentMethod === 'efectivo' && numReceived < totalAmount) {
+      setError('El efectivo recibido debe ser igual o mayor al total a pagar');
+      return;
+    }
+
     setError(null);
     setLoading(true);
 
@@ -478,9 +483,9 @@ export const DirectSaleModal: React.FC<DirectSaleModalProps> = ({ onClose, onSuc
               </button>
               <button
                 type="button"
-                disabled={loading}
                 onClick={handleCheckoutPaid}
-                className="flex-2 py-3 rounded-xl bg-[#10B981] hover:bg-[#10B981]/90 font-black text-xs text-white shadow-lg flex items-center justify-center gap-2 cursor-pointer transition font-timer"
+                disabled={loading || (paymentMethod === 'efectivo' && numReceived < totalAmount)}
+                className="flex-2 py-3 rounded-xl bg-[#10B981] hover:bg-[#10B981]/90 disabled:opacity-50 font-black text-xs text-white shadow-lg flex items-center justify-center gap-2 cursor-pointer transition font-timer"
               >
                 {loading ? 'Procesando...' : `CONFIRMAR PAGO (${formatMoney(totalAmount)})`}
               </button>

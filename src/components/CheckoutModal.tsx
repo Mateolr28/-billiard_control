@@ -28,6 +28,7 @@ export const CheckoutModal: React.FC<CheckoutModalProps> = ({
 
   const [activeTab, setActiveTab] = useState<'review' | 'cobrar' | 'fiar'>('review');
   const [paymentMethod, setPaymentMethod] = useState<PaymentMethod>('efectivo');
+  const [cashReceived, setCashReceived] = useState('');
   const [selectedCustomerId, setSelectedCustomerId] = useState<string>('');
   const [newCustomerName, setNewCustomerName] = useState<string>('');
   const [notes, setNotes] = useState<string>('');
@@ -39,8 +40,15 @@ export const CheckoutModal: React.FC<CheckoutModalProps> = ({
   const timeCost = calculateTimeCost(elapsedSeconds, session.hourly_rate);
   const itemsCost = items.reduce((acc, curr) => acc + curr.total_price, 0);
   const totalAmount = timeCost + itemsCost;
+  const cashReceivedAmount = parseFloat(cashReceived) || 0;
+  const changeAmount = cashReceivedAmount - totalAmount;
 
   const handleCobrar = async () => {
+    if (paymentMethod === 'efectivo' && cashReceivedAmount < totalAmount) {
+      alert('El efectivo recibido debe ser igual o mayor al total a pagar');
+      return;
+    }
+
     setIsSubmitting(true);
     try {
       await billiardService.checkoutSession(session.id, paymentMethod, notes);
@@ -254,6 +262,38 @@ export const CheckoutModal: React.FC<CheckoutModalProps> = ({
               </div>
             </div>
 
+            {paymentMethod === 'efectivo' && (
+              <div className="p-3.5 rounded-2xl bg-[#1E293B] border border-[#334155] space-y-3">
+                <div className="flex items-center justify-between">
+                  <label className="text-xs font-bold text-[#94A3B8]">Efectivo recibido</label>
+                  <button
+                    type="button"
+                    onClick={() => setCashReceived(String(totalAmount))}
+                    className="text-[11px] text-[#10B981] font-bold hover:underline cursor-pointer font-timer"
+                  >
+                    Exacto ({formatMoney(totalAmount)})
+                  </button>
+                </div>
+
+                <input
+                  type="number"
+                  min={totalAmount}
+                  step="100"
+                  value={cashReceived}
+                  onChange={(e) => setCashReceived(e.target.value)}
+                  placeholder="Ingresa el monto recibido"
+                  className="w-full bg-[#273449] border border-[#334155] rounded-xl px-3 py-2.5 text-lg font-black text-[#F8FAFC] font-timer focus:outline-hidden focus:border-[#10B981]"
+                />
+
+                <div className="flex items-center justify-between p-2 rounded-xl bg-[#273449] border border-[#10B981]/40">
+                  <span className="text-xs font-bold text-[#10B981]">Cambio / Vuelto:</span>
+                  <span className="text-lg font-black text-[#34D399] font-timer">
+                    {formatMoney(Math.max(0, changeAmount))}
+                  </span>
+                </div>
+              </div>
+            )}
+
             <div>
               <label className="text-xs text-[#94A3B8] block mb-1">Nota (opcional):</label>
               <input
@@ -277,7 +317,7 @@ export const CheckoutModal: React.FC<CheckoutModalProps> = ({
               <button
                 type="button"
                 onClick={handleCobrar}
-                disabled={isSubmitting}
+                disabled={isSubmitting || (paymentMethod === 'efectivo' && cashReceivedAmount < totalAmount)}
                 className="flex-2 py-3 px-4 rounded-xl bg-[#10B981] hover:bg-[#10B981]/90 text-white font-black text-sm shadow-lg transition active:scale-98 cursor-pointer flex items-center justify-center gap-2"
               >
                 <CheckCircle2 className="w-4 h-4" />

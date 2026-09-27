@@ -42,6 +42,7 @@ export const FiadosModule: React.FC = () => {
   // Abono Form State
   const [abonoAmount, setAbonoAmount] = useState('');
   const [abonoMethod, setAbonoMethod] = useState<PaymentMethod>('efectivo');
+  const [cashReceived, setCashReceived] = useState('');
   const [abonoNote, setAbonoNote] = useState('');
   const [isSubmitting, setIsSubmitting] = useState(false);
 
@@ -164,10 +165,17 @@ export const FiadosModule: React.FC = () => {
       return;
     }
 
+    const cashReceivedAmount = parseFloat(cashReceived) || 0;
+    if (abonoMethod === 'efectivo' && cashReceivedAmount < amountNum) {
+      alert('El efectivo recibido debe ser igual o mayor al monto del abono');
+      return;
+    }
+
     setIsSubmitting(true);
     try {
       await billiardService.registerDebtPayment(selectedCustomerId, amountNum, abonoMethod, abonoNote);
       setAbonoAmount('');
+      setCashReceived('');
       setAbonoNote('');
       setShowAbonoModal(false);
     } catch (err: any) {
@@ -577,6 +585,36 @@ export const FiadosModule: React.FC = () => {
                 </div>
               </div>
 
+              {abonoMethod === 'efectivo' && (
+                <div className="p-3 rounded-xl bg-[#1E293B] border border-[#334155] space-y-2">
+                  <div className="flex items-center justify-between">
+                    <label className="text-xs text-[#94A3B8]">Efectivo recibido</label>
+                    <button
+                      type="button"
+                      onClick={() => setCashReceived(abonoAmount)}
+                      className="text-[11px] font-bold text-[#10B981] hover:text-white cursor-pointer font-timer"
+                    >
+                      Exacto
+                    </button>
+                  </div>
+                  <input
+                    type="number"
+                    min={parseFloat(abonoAmount) || 0}
+                    step="100"
+                    placeholder="Ingresa el monto recibido"
+                    value={cashReceived}
+                    onChange={(e) => setCashReceived(e.target.value)}
+                    className="w-full bg-[#273449] border border-[#334155] rounded-xl px-3.5 py-2.5 text-base font-bold text-[#F8FAFC] focus:outline-hidden focus:border-[#10B981] font-timer"
+                  />
+                  <div className="flex items-center justify-between text-xs">
+                    <span className="text-[#10B981] font-bold">Cambio / Vuelto:</span>
+                    <strong className="text-[#34D399] font-timer">
+                      {formatMoney(Math.max(0, (parseFloat(cashReceived) || 0) - (parseFloat(abonoAmount) || 0)))}
+                    </strong>
+                  </div>
+                </div>
+              )}
+
               <div>
                 <label className="text-xs text-[#94A3B8] block mb-1">Nota (opcional)</label>
                 <input
@@ -598,7 +636,7 @@ export const FiadosModule: React.FC = () => {
                 </button>
                 <button
                   type="submit"
-                  disabled={isSubmitting}
+                  disabled={isSubmitting || (abonoMethod === 'efectivo' && (parseFloat(cashReceived) || 0) < (parseFloat(abonoAmount) || 0))}
                   className="flex-2 py-2.5 px-4 rounded-xl bg-[#10B981] hover:bg-[#10B981]/90 text-white text-xs font-bold shadow-md cursor-pointer flex items-center justify-center gap-1.5"
                 >
                   <CheckCircle2 className="w-4 h-4" />
