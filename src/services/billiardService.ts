@@ -1354,6 +1354,8 @@ export const billiardService = {
       await db.customer_tab_items.where('tab_id').equals(tabId).delete();
       await db.customer_tabs.delete(tabId);
     });
+
+    await syncService.enqueueOperation('customer_tabs', 'DELETE', { id: tabId });
   },
 
   /**

@@ -34,7 +34,7 @@ class SyncService {
         if (this.state.isOnline && this.state.isConfigured && !this.syncInProgress) {
           this.processSyncQueue().catch(() => {});
         }
-      }, 30000);
+      }, 1000);
     }
   }
 
