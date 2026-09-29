@@ -12,6 +12,8 @@ import {
   Wifi,
   WifiOff,
   Coins,
+  LogOut,
+  ShieldCheck,
 } from 'lucide-react';
 import { db } from './db';
 import { TableBoard } from './components/TableBoard';
@@ -23,14 +25,57 @@ import { SlotMachinesModule } from './components/SlotMachinesModule';
 import { SyncStatusBadge } from './components/SyncStatusBadge';
 import { PWAInstallButton } from './components/PWAInstallButton';
 import { soundService } from './utils/sound';
+import { LoginScreen } from './components/LoginScreen';
+import { AdminUsersModule } from './components/AdminUsersModule';
+import { authService, AuthSession } from './services/authService';
+import { syncService } from './services/syncService';
 
-type NavTab = 'tables' | 'inventory' | 'slots' | 'fiados' | 'cash' | 'settings';
+type NavTab = 'tables' | 'inventory' | 'slots' | 'fiados' | 'cash' | 'settings' | 'admin';
 
 export default function App() {
+  const isAdminRoute = typeof window !== 'undefined' && window.location.pathname.replace(/\/$/, '') === '/admin';
   const [currentTab, setCurrentTab] = useState<NavTab>('tables');
   const [soundEnabled, setSoundEnabled] = useState(soundService.isAudioEnabled());
+  const [authSession, setAuthSession] = useState<AuthSession | null>(null);
+  const [authReady, setAuthReady] = useState(false);
+  const [authError, setAuthError] = useState('');
 
-  // Count indicators for navigation badges
+  useEffect(() => {
+    let mounted = true;
+    let unsubscribe = () => {};
+    const refreshSession = async () => {
+      try {
+        const session = await Promise.race([
+          authService.getSession(),
+          new Promise<null>((resolve) => window.setTimeout(() => resolve(null), 5000)),
+        ]);
+        if (mounted) setAuthSession(session);
+      } catch (error: any) {
+        if (mounted) setAuthError(error?.message || 'No fue posible validar la sesión.');
+      } finally {
+        if (mounted) setAuthReady(true);
+      }
+    };
+    const initializeAuth = async () => {
+      try {
+        if (!syncService.getClient()) await syncService.init();
+        if (!mounted) return;
+        unsubscribe = authService.onAuthStateChange(() => {
+          window.setTimeout(() => refreshSession(), 0);
+        });
+        await refreshSession();
+      } catch (error: any) {
+        if (mounted) {
+          setAuthError(error?.message || 'No fue posible inicializar la autenticación.');
+          setAuthReady(true);
+        }
+      }
+    };
+    initializeAuth();
+    return () => { mounted = false; unsubscribe(); };
+  }, []);
+
+  // Keep hook order stable while the session gate changes screens.
   const activeTablesCount =
     useLiveQuery(
       () => db.billiard_tables.where('status').anyOf(['jugando', 'pausada', 'prepago', 'solo_consumo']).count(),
@@ -49,7 +94,6 @@ export default function App() {
   const slotMachinesCount =
     useLiveQuery(() => db.slot_machines.where('status').equals('activa').count(), []) || 0;
 
-  // Stock alerts count (low stock or out of stock)
   const lowStockCount =
     useLiveQuery(
       () =>
@@ -63,6 +107,47 @@ export default function App() {
           ),
       []
     ) || 0;
+
+  if (!authReady) {
+    return <div className="min-h-screen bg-[#0F172A] text-[#94A3B8] flex items-center justify-center text-sm">Validando acceso...</div>;
+  }
+
+  if (!authSession || (isAdminRoute && authSession.profile.role !== 'admin')) {
+    return <LoginScreen configured={Boolean(syncService.getClient())} errorMessage={authError} onAuthenticated={async () => {
+      try {
+        const session = await authService.getSession();
+        if (isAdminRoute && session?.profile.role !== 'admin') {
+          await authService.signOut();
+          setAuthSession(null);
+          setAuthError('Esta ruta requiere una cuenta administradora.');
+          return;
+        }
+        setAuthError('');
+        setAuthSession(session);
+      } catch (error: any) {
+        setAuthError(error?.message || 'No fue posible cargar el perfil.');
+      }
+    }} />;
+  }
+
+  if (isAdminRoute) {
+    return (
+      <div className="min-h-screen bg-[#0F172A] text-[#F8FAFC] p-4 sm:p-8">
+        <div className="mx-auto max-w-7xl">
+          <header className="mb-8 flex items-center justify-between gap-4 border-b border-[#334155] pb-5">
+            <div>
+              <p className="text-xs font-bold uppercase tracking-[0.18em] text-[#34D399]">BILLAR & CLUB</p>
+              <h1 className="mt-1 text-xl font-black">Panel de administración</h1>
+            </div>
+            <button onClick={() => authService.signOut()} className="rounded-xl border border-[#334155] bg-[#273449] px-3 py-2 text-xs font-bold text-[#CBD5E1] hover:text-white">
+              Cerrar sesión
+            </button>
+          </header>
+          <AdminUsersModule />
+        </div>
+      </div>
+    );
+  }
 
   const toggleSound = () => {
     const nextState = !soundEnabled;
@@ -104,6 +189,11 @@ export default function App() {
             {/* Offline & Sync Status */}
             <SyncStatusBadge onOpenSettings={() => setCurrentTab('settings')} />
 
+            <span className="hidden sm:inline text-xs text-[#CBD5E1]">{authSession.profile.full_name}</span>
+            <button onClick={() => authService.signOut()} className="rounded-xl border border-[#334155] bg-[#273449] p-2 text-[#94A3B8] hover:text-[#F8FAFC]" title="Cerrar sesión">
+              <LogOut className="w-4 h-4" />
+            </button>
+
             {/* Sound Toggle */}
             <button
               onClick={toggleSound}
@@ -116,6 +206,16 @@ export default function App() {
             >
               {soundEnabled ? <Volume2 className="w-4 h-4" /> : <VolumeX className="w-4 h-4" />}
             </button>
+
+            {authSession.profile.role === 'admin' && (
+              <button
+                onClick={() => setCurrentTab('admin')}
+                className={`flex items-center gap-2 px-2.5 sm:px-4 py-2 rounded-xl text-xs font-bold transition cursor-pointer ${currentTab === 'admin' ? 'bg-[#10B981] text-white shadow-sm' : 'text-[#94A3B8] hover:text-[#F8FAFC] hover:bg-[#273449]'}`}
+              >
+                <ShieldCheck className="w-4 h-4" />
+                <span className="hidden sm:inline">Administrar cuentas</span>
+              </button>
+            )}
           </div>
         </div>
 
@@ -239,6 +339,7 @@ export default function App() {
         {currentTab === 'fiados' && <FiadosModule />}
         {currentTab === 'cash' && <CashModule />}
         {currentTab === 'settings' && <SettingsModule />}
+        {currentTab === 'admin' && authSession.profile.role === 'admin' && <AdminUsersModule />}
       </main>
 
       {/* Mobile Sticky Bottom Navigation */}

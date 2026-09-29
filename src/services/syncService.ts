@@ -34,7 +34,7 @@ class SyncService {
         if (this.state.isOnline && this.state.isConfigured && !this.syncInProgress) {
           this.processSyncQueue().catch(() => {});
         }
-      }, 1);
+      }, 30000);
     }
   }
 
@@ -46,18 +46,20 @@ class SyncService {
     let supabaseAnonKey = anonKey;
 
     if (!supabaseUrl || !supabaseAnonKey) {
-      // Check database settings
-      const settings = await db.settings.get('default_config');
-      if (settings?.supabase_url && settings?.supabase_anon_key) {
-        supabaseUrl = settings.supabase_url;
-        supabaseAnonKey = settings.supabase_anon_key;
+      // Environment configuration must not wait for IndexedDB to open.
+      const envUrl = (import.meta as any).env?.VITE_SUPABASE_URL;
+      const envKey = (import.meta as any).env?.VITE_SUPABASE_ANON_KEY;
+      if (envUrl && envKey) {
+        supabaseUrl = envUrl;
+        supabaseAnonKey = envKey;
       } else {
-        // Check environment variables
-        const envUrl = (import.meta as any).env?.VITE_SUPABASE_URL;
-        const envKey = (import.meta as any).env?.VITE_SUPABASE_ANON_KEY;
-        if (envUrl && envKey) {
-          supabaseUrl = envUrl;
-          supabaseAnonKey = envKey;
+        const settings = await Promise.race([
+          db.settings.get('default_config'),
+          new Promise<undefined>((resolve) => window.setTimeout(() => resolve(undefined), 1500)),
+        ]);
+        if (settings?.supabase_url && settings?.supabase_anon_key) {
+          supabaseUrl = settings.supabase_url;
+          supabaseAnonKey = settings.supabase_anon_key;
         }
       }
     }
@@ -84,13 +86,21 @@ class SyncService {
       this.state.isConfigured = false;
     }
 
-    await this.updatePendingCount();
     this.notify();
+
+    // Local queue health must not block the authentication screen.
+    this.updatePendingCount()
+      .then(() => this.notify())
+      .catch(() => {});
 
     // Trigger sync if online and configured
     if (this.state.isConfigured && this.state.isOnline) {
       this.processSyncQueue().catch(() => {});
     }
+  }
+
+  getClient(): SupabaseClient | null {
+    return this.client;
   }
 
   /**
