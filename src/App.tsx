@@ -49,6 +49,7 @@ export default function App() {
           authService.getSession(),
           new Promise<null>((resolve) => window.setTimeout(() => resolve(null), 5000)),
         ]);
+        await syncService.setUser(session?.user.id || null);
         if (mounted) setAuthSession(session);
       } catch (error: any) {
         if (mounted) setAuthError(error?.message || 'No fue posible validar la sesión.');
@@ -116,6 +117,7 @@ export default function App() {
     return <LoginScreen configured={Boolean(syncService.getClient())} errorMessage={authError} onAuthenticated={async () => {
       try {
         const session = await authService.getSession();
+        await syncService.setUser(session?.user.id || null);
         if (isAdminRoute && session?.profile.role !== 'admin') {
           await authService.signOut();
           setAuthSession(null);

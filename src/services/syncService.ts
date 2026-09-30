@@ -17,6 +17,7 @@ class SyncService {
   private supabaseUrl: string = '';
   private supabaseAnonKey: string = '';
   private syncInProgress = false;
+  private currentUserId: string | null = null;
   private listeners: ((state: SyncState) => void)[] = [];
   private state: SyncState = {
     status: 'synced',
@@ -103,6 +104,37 @@ class SyncService {
     return this.client;
   }
 
+  async setUser(userId: string | null) {
+    if (this.currentUserId === userId) return;
+
+    this.currentUserId = userId;
+    await Promise.all([
+      db.billiard_tables.clear(),
+      db.sessions.clear(),
+      db.session_items.clear(),
+      db.products.clear(),
+      db.customers.clear(),
+      db.debts.clear(),
+      db.debt_payments.clear(),
+      db.sales.clear(),
+      db.sale_items.clear(),
+      db.cash_movements.clear(),
+      db.daily_closings.clear(),
+      db.sync_queue.clear(),
+      db.audit_logs.clear(),
+      db.customer_tabs.clear(),
+      db.customer_tab_items.clear(),
+      db.slot_machines.clear(),
+      db.slot_machine_movements.clear(),
+    ]);
+
+    if (userId && this.state.isOnline && this.state.isConfigured) {
+      await this.pullRemoteData();
+    }
+    await this.updatePendingCount();
+    this.notify();
+  }
+
   /**
    * Subscribe to sync state changes
    */
@@ -158,7 +190,7 @@ class SyncService {
       id: generateUUID(),
       table_name: tableName,
       operation,
-      payload,
+      payload: this.currentUserId ? { ...payload, owner_id: this.currentUserId } : payload,
       timestamp: new Date().toISOString(),
       status: 'pending',
       retry_count: 0,
@@ -257,6 +289,7 @@ class SyncService {
                 const now = new Date().toISOString();
                 customer = {
                   id: customerId,
+                  owner_id: this.currentUserId,
                   name: payload.customer_name || tab?.customer_name || 'Cliente',
                   phone: tab?.phone,
                   notes: tab?.notes,
@@ -404,7 +437,7 @@ class SyncService {
 
   /** Download remote records so every browser/device receives changes from others. */
   private async pullRemoteData() {
-    if (!this.client || !this.state.isOnline) return;
+    if (!this.client || !this.state.isOnline || !this.currentUserId) return;
 
     const localTableNames: Record<string, string> = {
       tables: 'billiard_tables',

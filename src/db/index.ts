@@ -79,6 +79,9 @@ export const db = new BillarDatabase();
  * Seed initial billiard hall data if the database is newly initialized
  */
 export async function seedInitialData() {
+  // Las cuentas nuevas deben comenzar vacias; los datos se crean por usuario.
+  return;
+
   const tableCount = await db.billiard_tables.count();
   if (tableCount === 0) {
     const defaultRate = 10000;

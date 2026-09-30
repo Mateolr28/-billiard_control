@@ -68,6 +68,7 @@ export interface Product {
 
 export interface Customer {
   id: string; // UUID
+  owner_id?: string;
   name: string;
   phone?: string;
   notes?: string;

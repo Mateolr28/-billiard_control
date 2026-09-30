@@ -68,6 +68,51 @@ create policy profiles_read on public.profiles for select to authenticated
 create policy profiles_admin_update on public.profiles for update to authenticated
   using (public.is_admin()) with check (public.is_admin());
 
+-- Cada registro operativo pertenece a una sola cuenta. Los datos antiguos sin
+-- propietario quedan ocultos hasta que se asignen explícitamente a una cuenta.
+do $$
+declare
+  table_name text;
+begin
+  foreach table_name in array array[
+    'establishments', 'tables', 'table_sessions', 'session_items', 'products',
+    'customers', 'debts', 'debt_payments', 'sales', 'sale_items',
+    'customer_tabs', 'customer_tab_items', 'cash_movements', 'daily_closings',
+    'audit_logs', 'slot_machines', 'slot_machine_movements'
+  ]
+  loop
+    execute format('alter table public.%I add column if not exists owner_id uuid references auth.users(id)', table_name);
+  end loop;
+end;
+$$;
+
+-- Conserva los datos existentes en la cuenta administradora inicial.
+do $$
+declare
+  table_name text;
+  first_admin uuid;
+begin
+  select id into first_admin
+  from public.profiles
+  where role = 'admin'
+  order by created_at
+  limit 1;
+
+  if first_admin is not null then
+    foreach table_name in array array[
+      'establishments', 'tables', 'table_sessions', 'session_items', 'products',
+      'customers', 'debts', 'debt_payments', 'sales', 'sale_items',
+      'customer_tabs', 'customer_tab_items', 'cash_movements', 'daily_closings',
+      'audit_logs', 'slot_machines', 'slot_machine_movements'
+    ]
+    loop
+      execute format('update public.%I set owner_id = $1 where owner_id is null', table_name)
+      using first_admin;
+    end loop;
+  end if;
+end;
+$$;
+
 -- The old schema used USING (true). Remove those policies before enabling the protected ones.
 do $$
 declare
@@ -101,7 +146,7 @@ begin
   ]
   loop
     execute format(
-      'create policy authenticated_access on public.%I for all to authenticated using (public.is_active_user()) with check (public.is_active_user())',
+      'create policy authenticated_access on public.%I for all to authenticated using (public.is_active_user() and owner_id = auth.uid()) with check (public.is_active_user() and owner_id = auth.uid())',
       table_name
     );
   end loop;
